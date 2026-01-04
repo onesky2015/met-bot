@@ -128,10 +128,20 @@ def fetch_rss_articles(sources: list) -> list:
         logger.info(f"正在获取: {source_name}")
 
         try:
-            feed = feedparser.parse(url)
+            # ==============================================================================
+            # 关键修改：添加 User-Agent 伪装
+            # 作用：模拟 Chrome 浏览器访问，防止 ClinicalTrials.gov 返回 403/404 错误
+            # ==============================================================================
+            user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            
+            # 使用 agent 参数发送请求
+            feed = feedparser.parse(url, agent=user_agent)
 
+            # 错误检查逻辑
             if feed.bozo and feed.bozo_exception:
-                logger.warning(f"解析 '{source_name}' 时出现问题: {feed.bozo_exception}")
+                # 某些 XML 可能有轻微格式问题但不影响读取，这里做记录
+                # 如果是因为被拦截，这里通常会报 SAXParseException
+                logger.warning(f"解析 '{source_name}' 时收到警告 (可能是网络拦截或格式问题): {feed.bozo_exception}")
 
             for entry in feed.entries:
                 # 生成唯一ID (优先使用id，否则使用link)
