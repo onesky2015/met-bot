@@ -1,0 +1,13 @@
+# filename: requirements.txt
+# 医疗情报自动收集与推送机器人依赖
+
+# RSS 解析库
+feedparser>=6.0.10
+
+# HTTP 请求库
+requests>=2.31.0
+
+# Google Gemini AI SDK
+google-generativeai>=0.3.0
+
+
