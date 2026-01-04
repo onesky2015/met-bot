@@ -36,7 +36,7 @@ RSS_SOURCES = [
         "name": "ClinicalTrials - Pediatric Lupus",
         # ✅ 修正点：将 'apirss' 改为 'api/rss' (加了斜杠)
         # 链接逻辑：搜索红斑狼疮(SLE) + 儿童(child) + 过去60天(in_last=60)
-        "url":"https://clinicaltrials.gov/api/rss?cond=Systemic+Lupus+Erythematosus&term=Child",
+        "url":"https://clinicaltrials.gov/api/rss?cond=Systemic+Lupus+Erythematosus",
     },
 ]
 
