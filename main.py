@@ -7,6 +7,7 @@
 import os
 import json
 import logging
+import time
 from datetime import datetime
 from typing import Optional
 
@@ -109,6 +110,9 @@ def fetch_rss_articles(sources: list) -> list:
     """
     从RSS源获取文章列表。
 
+    使用 requests.Session() 自动处理 Cookie，解决部分网站的认证问题。
+    针对不同网站使用不同的 Headers 策略。
+
     Args:
         sources: RSS源配置列表
 
@@ -116,6 +120,12 @@ def fetch_rss_articles(sources: list) -> list:
         list: 文章列表，每个文章包含 id, title, link, summary, source
     """
     articles = []
+
+    # ==============================================================================
+    # 使用 Session 对象
+    # 优势：自动处理 Cookie、连接复用、更好的反爬虫绕过能力
+    # ==============================================================================
+    session = requests.Session()
 
     for source in sources:
         source_name = source.get("name", "Unknown")
@@ -129,41 +139,44 @@ def fetch_rss_articles(sources: list) -> list:
 
         # ==============================================================================
         # 根据不同网站设置不同的 Headers
-        # - PubMed: 使用简单的 Bot 标识，避免过度伪装被识别为欺诈 (403)
-        # - ClinicalTrials: 使用 Chrome 伪装，但简化 Headers 避免 400 错误
-        # - 其他网站: 使用通用的简单 Headers
         # ==============================================================================
         if "pubmed" in url.lower():
-            # PubMed 对过度伪装的 UA 会返回 403
-            # 使用简单的 Bot 标识，表明是合法的数据抓取
+            # PubMed 策略：
+            # - 使用科研标识的 User-Agent，表明是合法的学术数据抓取
+            # - 添加 Referer 头，模拟从 PubMed 主站跳转
             headers = {
-                'User-Agent': 'Mozilla/5.0 (compatible; MedicalIntellBot/1.0)',
+                'User-Agent': 'MedicalIntelligenceBot/1.0 (Research Purpose)',
+                'Referer': 'https://pubmed.ncbi.nlm.nih.gov/',
+                'Accept': 'application/rss+xml, application/xml, text/xml, */*',
             }
-            logger.debug("使用 PubMed 专用 Headers (简单 Bot 标识)")
+            logger.debug("使用 PubMed 专用 Headers (科研标识 + Referer)")
 
         elif "clinicaltrials" in url.lower():
-            # ClinicalTrials 需要浏览器伪装，但 Headers 不能太复杂
-            # 移除 Accept-Encoding 避免压缩问题，简化 Accept 头
+            # ClinicalTrials 策略：
+            # - 使用标准的 Chrome 浏览器 Headers
+            # - Accept 使用浏览器标准格式
+            # - Session 会自动处理 Cookie
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': '*/*',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
                 'Connection': 'keep-alive',
             }
-            logger.debug("使用 ClinicalTrials 专用 Headers (Chrome 伪装)")
+            logger.debug("使用 ClinicalTrials 专用 Headers (标准 Chrome)")
 
         else:
             # 其他网站使用通用的简单 Headers
             headers = {
-                'User-Agent': 'Mozilla/5.0 (compatible; MedicalIntellBot/1.0)',
+                'User-Agent': 'MedicalIntelligenceBot/1.0 (Research Purpose)',
                 'Accept': 'application/rss+xml, application/xml, text/xml, */*',
             }
             logger.debug("使用通用 Headers")
 
         try:
             # ==============================================================================
-            # 步骤1: 使用 requests 下载 RSS 内容
+            # 步骤1: 使用 Session 下载 RSS 内容
             # ==============================================================================
-            response = requests.get(url, headers=headers, timeout=30)
+            response = session.get(url, headers=headers, timeout=30)
 
             # 步骤2: 检查 HTTP 状态码，捕获 403/404 等错误
             response.raise_for_status()
@@ -215,6 +228,15 @@ def fetch_rss_articles(sources: list) -> list:
         except Exception as e:
             logger.error(f"获取 '{source_name}' 失败 - 未知错误: {e}")
             continue
+
+        # ==============================================================================
+        # 步骤4: 请求间延时，避免请求过快被封禁
+        # ==============================================================================
+        logger.debug("等待 2 秒后继续下一个源...")
+        time.sleep(2)
+
+    # 关闭 Session
+    session.close()
 
     return articles
 
