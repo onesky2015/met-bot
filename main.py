@@ -117,19 +117,6 @@ def fetch_rss_articles(sources: list) -> list:
     """
     articles = []
 
-    # ==============================================================================
-    # 完整的浏览器伪装 Headers
-    # 作用：模拟真实 Chrome 浏览器访问，绕过 ClinicalTrials.gov 等网站的反爬虫机制
-    # ==============================================================================
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/rss+xml, application/xml, text/xml, */*',
-        'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive',
-        'Cache-Control': 'no-cache',
-    }
-
     for source in sources:
         source_name = source.get("name", "Unknown")
         url = source.get("url", "")
@@ -140,10 +127,41 @@ def fetch_rss_articles(sources: list) -> list:
 
         logger.info(f"正在获取: {source_name}")
 
+        # ==============================================================================
+        # 根据不同网站设置不同的 Headers
+        # - PubMed: 使用简单的 Bot 标识，避免过度伪装被识别为欺诈 (403)
+        # - ClinicalTrials: 使用 Chrome 伪装，但简化 Headers 避免 400 错误
+        # - 其他网站: 使用通用的简单 Headers
+        # ==============================================================================
+        if "pubmed" in url.lower():
+            # PubMed 对过度伪装的 UA 会返回 403
+            # 使用简单的 Bot 标识，表明是合法的数据抓取
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (compatible; MedicalIntellBot/1.0)',
+            }
+            logger.debug("使用 PubMed 专用 Headers (简单 Bot 标识)")
+
+        elif "clinicaltrials" in url.lower():
+            # ClinicalTrials 需要浏览器伪装，但 Headers 不能太复杂
+            # 移除 Accept-Encoding 避免压缩问题，简化 Accept 头
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': '*/*',
+                'Connection': 'keep-alive',
+            }
+            logger.debug("使用 ClinicalTrials 专用 Headers (Chrome 伪装)")
+
+        else:
+            # 其他网站使用通用的简单 Headers
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (compatible; MedicalIntellBot/1.0)',
+                'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+            }
+            logger.debug("使用通用 Headers")
+
         try:
             # ==============================================================================
             # 步骤1: 使用 requests 下载 RSS 内容
-            # 优势：比 feedparser 直接请求更灵活，可以完整控制 headers 和错误处理
             # ==============================================================================
             response = requests.get(url, headers=headers, timeout=30)
 
@@ -154,8 +172,6 @@ def fetch_rss_articles(sources: list) -> list:
 
             # ==============================================================================
             # 步骤3: 使用 feedparser 解析下载到的二进制内容
-            # 注意：使用 response.content (bytes) 而不是 response.text (str)
-            # feedparser 可以自动处理编码问题
             # ==============================================================================
             feed = feedparser.parse(response.content)
 
