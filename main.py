@@ -51,7 +51,7 @@ RSS_SOURCES = [
     },
 ]
 
-HISTORY_FILE = "history.json"
+HISTORY_FILE = "history_new.json"
 MAX_HISTORY_SIZE = 1000
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -279,6 +279,7 @@ def main():
     
     history = load_history()
     all_articles = fetch_rss_articles(RSS_SOURCES)
+    logger.info(f"🔍 调试: 共抓取到 {len(all_articles)} 篇原始文章")
     
     # ⚠️ 强制模式：无视历史记录，强制发送所有文章（测试用）
     new_articles = all_articles 
