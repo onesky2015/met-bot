@@ -225,7 +225,10 @@ def generate_ai_summary(articles: list) -> Optional[str]:
 
 def send_telegram_message(text: str) -> bool:
     """发送消息到 Telegram，失败时自动降级为纯文本"""
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID: return False
+    # 检查配置是否存在
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID: 
+        logger.error("未配置 TELEGRAM_BOT_TOKEN 或 TELEGRAM_CHAT_ID")
+        return False
 
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     
@@ -245,7 +248,9 @@ def send_telegram_message(text: str) -> bool:
 
     all_success = True
     for i, msg in enumerate(messages, 1):
+        # -------------------------------------------------------
         # 方案 A: 尝试 Markdown 发送 (好看)
+        # -------------------------------------------------------
         payload = {
             "chat_id": TELEGRAM_CHAT_ID,
             "text": msg,
@@ -263,8 +268,12 @@ def send_telegram_message(text: str) -> bool:
         except Exception as e:
             logger.warning(f"消息 {i} 网络异常: {e}")
 
-        # 方案 B: 降级为纯文本发送 (保底)
-        payload["parse_mode"] = None # 取消格式化
+        # -------------------------------------------------------
+        # 方案 B: 降级为纯文本发送 (保底修复版)
+        # -------------------------------------------------------
+        # 关键修改：使用 pop 彻底移除 parse_mode 字段，而不是设为 None
+        payload.pop("parse_mode", None) 
+        
         try:
             resp = requests.post(url, json=payload, timeout=30)
             if resp.status_code == 200:
