@@ -197,13 +197,14 @@ def fetch_rss_articles(sources: list) -> list:
     articles = []
     session = requests.Session()
     
-    # 🕵️‍♂️ 强力伪装：模拟真实的 Chrome 浏览器
+    # 🕵️‍♂️ 终极伪装：模拟真实用户访问路径
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
+        # 🟢 新增：告诉对方我是从官网首页来的
+        'Referer': 'https://pubmed.ncbi.nlm.nih.gov/',
+        'Accept-Language': 'en-US,en;q=0.9',
         'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
     }
     
     for source in sources:
@@ -211,12 +212,11 @@ def fetch_rss_articles(sources: list) -> list:
         logger.info(f"正在连接: {source['name']} ...")
         
         try:
-            # 增加超时时间到 60秒
             resp = session.get(url, headers=headers, timeout=60)
             
-            # 🔍 关键调试日志：告诉我们对方服务器到底返回了什么
             if resp.status_code == 200:
                 feed = feedparser.parse(resp.content)
+                # 只要不是 None 就尝试读取，不强制要求 entries
                 if feed.entries:
                     logger.info(f" -> ✅ 成功抓取 {len(feed.entries)} 篇文章")
                     for entry in feed.entries:
@@ -228,10 +228,10 @@ def fetch_rss_articles(sources: list) -> list:
                             "source": source.get("name")
                         })
                 else:
-                    logger.warning(f" -> ⚠️ 连接成功(200)但内容为空。可能链接已失效，或返回了非RSS格式。")
-                    logger.info(f" -> 页面前50个字符: {resp.text[:50]}") # 看看是不是报错页面
+                    # 这通常意味着源是好的，只是没新文章
+                    logger.info(f" -> ℹ️ 连接成功，但该源当前无新文章 (RSS为空)。")
             else:
-                logger.error(f" -> ❌ 抓取失败，状态码: {resp.status_code} (可能是IP被封锁)")
+                logger.error(f" -> ❌ 抓取失败，状态码: {resp.status_code}")
                 
         except Exception as e:
             logger.error(f" -> 💥 网络错误: {e}")
