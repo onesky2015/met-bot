@@ -43,7 +43,7 @@ AI_MODEL_NAME = os.environ.get("AI_MODEL_NAME", "")
 RSS_SOURCES = [
     {
         "name": "PubMed - Pediatric SLE",
-        "url": "https://pubmed.ncbi.nlm.nih.gov/rss/search/14_xQ7JEOWXDuopaPahtu8vYOV9ttMUxoq8IeKOLBpA7Zak9UG/?limit=15&utm_campaign=pubmed-2&fc=20260103215413",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/rss/search/1Li5J1cBG7VJyJPyjwdyZNNgH1An0nTrXc8jc36sviwyJP9cHD/?limit=15&utm_campaign=pubmed-2&fc=20260106080156",
     },
     {
         "name": "ClinicalTrials - Pediatric Lupus",
