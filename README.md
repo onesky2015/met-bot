@@ -68,6 +68,17 @@
    | `QWEN_API_KEY` | ⚠️ | 通义千问 API Key，使用 Qwen 时必填 |
    | `AI_MODEL_NAME` | ❌ | 自定义模型名称（豆包必填接入点 ID） |
 
+   **推送配置 (Telegram & 邮件)：**
+   | Secret 名称 | 必填 | 说明 |
+   | :--- | :---: | :--- |
+   | `TELEGRAM_BOT_TOKEN`| ❌ | TG Bot Token (如果不填则不发 TG) |
+   | `TELEGRAM_CHAT_ID` | ❌ | TG 目标群组/频道 ID |
+   | `SMTP_SERVER` | ❌ | 邮件服务器 (如 `smtp.qq.com`) |
+   | `SMTP_PORT` | ❌ | 端口 (QQ邮箱填 `587`) |
+   | `EMAIL_SENDER` | ❌ | 发件人邮箱 |
+   | `EMAIL_PASSWORD` | ❌ | **邮箱授权码/应用密码** (不是登录密码，见下文教程) |
+   | `EMAIL_RECEIVER` | ❌ | 收件人邮箱 |
+
 3. **启用 Actions**  
    进入仓库 → `Actions` → 点击 `I understand my workflows, go ahead and enable them`
 
@@ -75,7 +86,27 @@
    点击 `医疗情报日报` → `Run workflow` → `Run workflow` 手动触发
 
 5. **等待推送** 🎉  
-   每天 UTC 00:00（北京时间 08:00）自动运行
+   每天 UTC 23:30（北京时间 07:30）自动运行
+
+## 🔐 如何获取邮箱授权码 (EMAIL_PASSWORD)
+
+为了安全，现代邮箱不允许直接使用登录密码，必须使用“授权码”或“应用专用密码”。
+
+### 🐧 QQ 邮箱 (推荐)
+1.  电脑登录 [mail.qq.com](https://mail.qq.com)。
+2.  点击左上角 **【设置】** -> 选择 **【账户】**。
+3.  向下滚动找到 **“POP3/IMAP/SMTP...服务”**。
+4.  点击 **POP3/SMTP服务** 右侧的 **【开启】**。
+5.  按提示用手机发送短信验证。
+6.  复制弹出的 **16位授权码** (这就是 `EMAIL_PASSWORD`)。
+    * *Secret 提示：`SMTP_SERVER` 填 `smtp.qq.com`，`SMTP_PORT` 填 `587`*
+
+### 📮 Gmail (谷歌邮箱)
+1.  进入 [Google 账号安全设置](https://myaccount.google.com/security)。
+2.  开启 **“两步验证” (2-Step Verification)**。
+3.  搜索并进入 **“应用专用密码” (App passwords)**。
+4.  创建一个新应用，复制生成的 **16位密码**。
+    * *Secret 提示：`SMTP_SERVER` 填 `smtp.gmail.com`，`SMTP_PORT` 填 `587`*
 
 ---
 
