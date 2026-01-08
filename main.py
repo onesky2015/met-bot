@@ -1,9 +1,10 @@
 # filename: main.py
 """
-医疗情报自动收集与推送机器人 (v3.0 多模型版)
+医疗情报自动收集与推送机器人 (v3.1 多模型多语言版)
 
-功能: 从 RSS 源获取医学文献，使用 AI 总结，推送到 Telegram
+功能: 从 RSS 源获取医学文献，使用 AI 总结，推送到 Telegram 和邮件
 支持: Gemini, DeepSeek, 豆包(Doubao), 通义千问(Qwen)
+语言: 中文 (CN) / 英文 (EN)
 """
 
 # ============================================================
@@ -14,8 +15,11 @@
 import json
 import logging
 import os
+import smtplib
 import time
 from datetime import datetime
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from typing import Optional
 
 # 第三方库
@@ -44,6 +48,17 @@ QWEN_API_KEY = os.environ.get("QWEN_API_KEY", "")
 
 # 自定义模型名称 (可选，用于指定具体模型或豆包的接入点 ID)
 AI_MODEL_NAME = os.environ.get("AI_MODEL_NAME", "")
+
+# --- 语言配置 ---
+# 可选值: CN (中文，默认), EN (英文)
+SUMMARY_LANGUAGE = os.environ.get("SUMMARY_LANGUAGE", "CN").upper()
+
+# --- 邮件配置 ---
+SMTP_SERVER = os.environ.get("SMTP_SERVER", "")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "465"))
+EMAIL_SENDER = os.environ.get("EMAIL_SENDER", "")
+EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD", "")
+EMAIL_RECEIVER = os.environ.get("EMAIL_RECEIVER", "")
 
 # --- RSS 源列表 ---
 RSS_SOURCES = [
@@ -211,12 +226,12 @@ def filter_new_articles(articles: list, history: set) -> list:
 
 
 # ============================================================
-# AI 总结 (多模型支持)
+# AI 总结 (多模型支持 + 多语言支持)
 # ============================================================
 
 def build_prompt(articles: list) -> str:
     """
-    构建发送给 AI 的 Prompt。
+    构建发送给 AI 的 Prompt，支持中英文切换。
 
     Args:
         articles: 文章列表
@@ -224,19 +239,39 @@ def build_prompt(articles: list) -> str:
     Returns:
         格式化的 Prompt 字符串
     """
+    # 构建文章列表文本
     articles_text = ""
     for i, article in enumerate(articles, 1):
         summary_truncated = article["summary"][:500]
         articles_text += (
-            f"\n--- 文章 {i} ---\n"
-            f"标题: {article['title']}\n"
-            f"摘要: {summary_truncated}...\n"
-            f"链接: {article['link']}\n"
+            f"\n--- Article {i} ---\n"
+            f"Title: {article['title']}\n"
+            f"Abstract: {summary_truncated}...\n"
+            f"Link: {article['link']}\n"
         )
 
-    prompt = f"""你是一个风湿免疫科专家，请将以下关于"儿童红斑狼疮"的最新文献整理成中文日报。
+    current_date = datetime.now().strftime("%Y-%m-%d")
 
-日期: {datetime.now().strftime('%Y-%m-%d')}
+    # 根据语言配置选择 Prompt
+    if SUMMARY_LANGUAGE == "EN":
+        prompt = f"""You are a pediatric rheumatology expert. Please organize the following latest literature about "Pediatric Systemic Lupus Erythematosus (SLE)" into a daily digest.
+
+Date: {current_date}
+
+Requirements:
+1. Categorize into [Breaking News], [Clinical], and [Basic Research].
+2. Each entry should include: English title, a one-sentence plain-language summary, and the original link.
+3. Keep it professional yet accessible.
+4. Important: Do not use unclosed Markdown symbols (such as single * or _). Avoid complex formatting. Use plain text or simple emojis only.
+
+Articles to process:
+{articles_text}
+"""
+    else:
+        # 默认中文
+        prompt = f"""你是一个风湿免疫科专家，请将以下关于"儿童红斑狼疮"的最新文献整理成中文日报。
+
+日期: {current_date}
 
 要求：
 1. 分为【重磅】、【临床】、【基础】三类。
@@ -247,6 +282,7 @@ def build_prompt(articles: list) -> str:
 待处理文献：
 {articles_text}
 """
+
     return prompt
 
 
@@ -352,13 +388,19 @@ def generate_with_openai_compatible(prompt: str, provider: str) -> Optional[str]
 
     logger.info(f"正在调用 {provider.upper()} API (模型: {model_name})...")
 
+    # 根据语言选择 system prompt
+    if SUMMARY_LANGUAGE == "EN":
+        system_content = "You are a professional pediatric rheumatology medical literature assistant."
+    else:
+        system_content = "你是一个专业的风湿免疫科医学文献助手。"
+
     try:
         client = OpenAI(api_key=api_key, base_url=base_url)
 
         response = client.chat.completions.create(
             model=model_name,
             messages=[
-                {"role": "system", "content": "你是一个专业的风湿免疫科医学文献助手。"},
+                {"role": "system", "content": system_content},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.7,
@@ -397,7 +439,7 @@ def generate_ai_summary(articles: list) -> Optional[str]:
         return None
 
     prompt = build_prompt(articles)
-    logger.info(f"当前 AI 提供商: {AI_PROVIDER.upper()}")
+    logger.info(f"当前 AI 提供商: {AI_PROVIDER.upper()}, 语言: {SUMMARY_LANGUAGE}")
 
     if AI_PROVIDER == "gemini":
         return generate_with_gemini(prompt)
@@ -526,14 +568,95 @@ def send_telegram_message(text: str) -> bool:
 
 
 # ============================================================
+# 邮件推送
+# ============================================================
+
+def send_email(subject: str, content: str) -> bool:
+    """
+    发送邮件通知。
+
+    Args:
+        subject: 邮件主题
+        content: 邮件正文 (Markdown 格式)
+
+    Returns:
+        是否发送成功
+    """
+    # 检查必要配置
+    if not all([SMTP_SERVER, EMAIL_SENDER, EMAIL_PASSWORD, EMAIL_RECEIVER]):
+        logger.warning("邮件配置不完整，跳过邮件发送")
+        return False
+
+    logger.info(f"正在发送邮件到 {EMAIL_RECEIVER}...")
+
+    try:
+        # 创建邮件
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = EMAIL_SENDER
+        msg["To"] = EMAIL_RECEIVER
+
+        # 将 Markdown 换行符转换为 HTML 的 <br>，保证排版
+        html_content = content.replace("\n", "<br>\n")
+        html_body = f"""
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 800px; margin: 0 auto; padding: 20px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                {html_content}
+            </div>
+        </body>
+        </html>
+        """
+
+        # 添加纯文本和 HTML 版本
+        text_part = MIMEText(content, "plain", "utf-8")
+        html_part = MIMEText(html_body, "html", "utf-8")
+        msg.attach(text_part)
+        msg.attach(html_part)
+
+        # 发送邮件
+        if SMTP_PORT == 465:
+            # SSL 连接
+            with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
+                server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+                server.sendmail(EMAIL_SENDER, EMAIL_RECEIVER, msg.as_string())
+        else:
+            # TLS 连接
+            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
+                server.starttls()
+                server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+                server.sendmail(EMAIL_SENDER, EMAIL_RECEIVER, msg.as_string())
+
+        logger.info("邮件发送成功")
+        return True
+
+    except smtplib.SMTPAuthenticationError:
+        logger.error("邮件发送失败: SMTP 认证错误，请检查用户名和密码")
+    except smtplib.SMTPConnectError:
+        logger.error("邮件发送失败: 无法连接到 SMTP 服务器")
+    except Exception as e:
+        logger.error(f"邮件发送失败: {e}")
+
+    return False
+
+
+# ============================================================
 # 主流程
 # ============================================================
 
 def main():
     """主函数：协调整个工作流程"""
     logger.info("=" * 50)
-    logger.info("医疗情报收集机器人启动 (v3.0 多模型版)")
+    logger.info("医疗情报收集机器人启动 (v3.1 多模型多语言版)")
     logger.info(f"当前 AI 提供商: {AI_PROVIDER.upper()}")
+    logger.info(f"输出语言: {SUMMARY_LANGUAGE}")
     logger.info("=" * 50)
 
     # 1. 加载历史记录
@@ -554,10 +677,21 @@ def main():
 
     # 5. 推送消息
     if summary:
+        # 5.1 发送到 Telegram
         send_telegram_message(summary)
+
+        # 5.2 发送邮件 (如果配置了)
+        if SUMMARY_LANGUAGE == "EN":
+            email_subject = f"Pediatric SLE Daily Digest - {datetime.now().strftime('%Y-%m-%d')}"
+        else:
+            email_subject = f"红斑狼疮最新医疗信息日报 - {datetime.now().strftime('%Y-%m-%d')}"
+        send_email(email_subject, summary)
     else:
         # AI 失败时的备选方案
-        fallback = f"📅 {datetime.now().strftime('%Y-%m-%d')} 新文献通知 (AI 生成失败)\n\n"
+        if SUMMARY_LANGUAGE == "EN":
+            fallback = f"📅 {datetime.now().strftime('%Y-%m-%d')} New Literature Alert (AI generation failed)\n\n"
+        else:
+            fallback = f"📅 {datetime.now().strftime('%Y-%m-%d')} 新文献通知 (AI 生成失败)\n\n"
         fallback += "\n".join([f"• {a['title']}\n  {a['link']}" for a in new_articles[:5]])
         send_telegram_message(fallback)
 

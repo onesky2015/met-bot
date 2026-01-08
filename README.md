@@ -7,6 +7,17 @@
 [![GitHub Actions](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=github-actions&logoColor=white)](https://github.com/features/actions)
 [![Telegram](https://img.shields.io/badge/Push-Telegram-26A5E4?logo=telegram&logoColor=white)](https://telegram.org/)
 
+># 🏥 Pediatric SLE Intelligence Bot (儿童红斑狼疮医疗情报机器人)
+
+> **❤️ 写在前面 / Our Mission**
+>
+> 这个项目的诞生源于一位父亲/母亲对孩子的爱。为了抗击儿童红斑狼疮 (Systemic Lupus Erythematosus, SLE)，我们需要时刻关注全球最新的医疗进展。
+>
+> 我将这个自动化工具开源，是希望**每一位患者和家属都能平等地、及时地获取救命的信息**。希望这些最新的科研成果能为治疗带来新思路，为处于焦虑中的家庭带去希望。
+>
+> _"Information is hope."_
+
+---
 > 🔬 专为**儿童系统性红斑狼疮 (Pediatric SLE)** 研究设计的自动化文献监控机器人。  
 > 每日自动抓取 PubMed 和 ClinicalTrials 最新文献，通过 AI 生成中文日报，推送至 Telegram。
 
